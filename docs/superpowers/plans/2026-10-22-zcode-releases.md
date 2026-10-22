@@ -59,10 +59,10 @@ job only after the complete matrix succeeds.
 
 - [x] Document download links, synchronization cadence, manual rebuilds,
   platform support, unsigned-build warnings, and public-source feature limits.
-- [ ] Run all tests and static checks; independently review implementation.
+- [x] Run all tests and static checks; independently review implementation.
 - [x] Create the public repository, push a Lore-protocol commit, and enable
   Actions if necessary. Dispatch or observe the initial build.
-- [ ] Inspect each build job and fix recoverable failures. Verify Release asset
+- [x] Inspect each build job and fix recoverable failures. Verify Release asset
   names, checksums, upstream SHA, and repository state before reporting success.
 
 ### Task 4: ZcodePro Feature Assessment And Packaged Asset Gate
@@ -73,7 +73,7 @@ job only after the complete matrix succeeds.
   plugins or changing user settings.
 - [x] Strengthen skill/vendor/config checks with regression fixtures.
 - [x] Verify the actual Windows artifact using static NSIS payload extraction.
-- [ ] Build the new gate on native runners and require matching feature reports,
+- [x] Build the new gate on native runners and require matching feature reports,
   four source/hash receipts, and all notices before publication.
 
 ## Live Evidence
@@ -91,3 +91,12 @@ contradicting the shipped vendor hash. Restoring only the original Lucide bytes
 in a temporary extracted inspection copy makes all 15 asset checks pass; this is
 a diagnosis, not a verified repaired release. A fail-closed walker patch now
 preserves that vendor snapshot, with a test proving ordinary JS is still cleaned.
+
+Repaired run `39767198922` succeeds for all four native targets and the publish
+job. Public tag: `v3.16.2-upstream.3c5b22764937`. There are 23 uploaded assets,
+including 9 installers. All 22 entries in SHA256SUMS match GitHub asset digests.
+The downloaded Windows installer matches SHA256
+`441d65585aaad2ec72fdc3841a2af405ef0eed63d79470650466ece06045fb19`.
+All four feature reports record 15 verified packaged asset sets and explicitly
+report Computer Use unavailable. Local tests: 54 release + 81 feature = 135 pass.
+See `docs/verification-2026-10-22.md` for evidence and verification boundaries.
