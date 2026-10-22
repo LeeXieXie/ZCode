@@ -1,0 +1,376 @@
+name: Community Releases
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Upstream branch, tag, or complete commit SHA
+        required: true
+        default: main
+        type: string
+      force:
+        description: Rebuild an already published source snapshot
+        required: true
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release.yml
+      - scripts/**
+      - test/**
+      - .gitmodules
+
+permissions:
+  contents: read
+
+concurrency:
+  group: community-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Resolve Source And Synchronize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      version: ${{ steps.plan.outputs.version }}
+      node: ${{ steps.plan.outputs.node }}
+      pnpm: ${{ steps.plan.outputs.pnpm }}
+      tag: ${{ steps.plan.outputs.tag }}
+      title: ${{ steps.plan.outputs.title }}
+      builder_sha: ${{ steps.sync.outputs.builder_sha }}
+      build: ${{ steps.existing.outputs.build }}
+    steps:
+      - name: Checkout Builder
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Checkout Upstream Snapshot
+        uses: actions/checkout@v4
+        with:
+          repository: zai-org/ZCode
+          ref: ${{ inputs.source_ref || 'main' }}
+          path: upstream
+          persist-credentials: false
+
+      - name: Set Up Metadata Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Validate Source Metadata And Tool Pins
+        id: plan
+        run: node scripts/release.mjs plan upstream
+
+      - name: Synchronize Main Gitlink
+        id: sync
+        env:
+          SOURCE_REF: ${{ inputs.source_ref || 'main' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$SOURCE_REF" == main ]]; then
+            git add upstream
+            if ! git diff --cached --quiet; then
+              upstream_sha=$(git -C upstream rev-parse HEAD)
+              git config user.name 'github-actions[bot]'
+              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+              git commit -m "Track upstream so installers remain reproducible" \
+                -m "Upstream: https://github.com/zai-org/ZCode/commit/$upstream_sha" \
+                -m 'Confidence: high
+          Scope-risk: narrow
+          Tested: Metadata-only synchronization; native builds run separately'
+              credential=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+              git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $credential" \
+                push origin HEAD:main
+            fi
+          fi
+          echo "builder_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Check Whether Snapshot Is Already Published
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.plan.outputs.tag }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          set -euo pipefail
+          if gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
+            > "$RUNNER_TEMP/release-response.txt" 2> "$RUNNER_TEMP/release-error.txt"; then
+            draft=$(node --input-type=module -e '
+              import { readFileSync } from "node:fs";
+              const response = readFileSync(process.argv[1], "utf8");
+              const body = response.split(/\r?\n\r?\n/).slice(1).join("\n\n");
+              const release = JSON.parse(body);
+              if (typeof release.draft !== "boolean") throw new Error("Invalid release response");
+              console.log(release.draft);
+            ' "$RUNNER_TEMP/release-response.txt")
+            if [[ "$draft" == false && "$FORCE" != true ]]; then
+              echo 'build=false' >> "$GITHUB_OUTPUT"
+              echo "Published snapshot $RELEASE_TAG already exists; skipping."
+            else
+              echo 'build=true' >> "$GITHUB_OUTPUT"
+            fi
+          else
+            status=$(sed -nE 's/^HTTP\/[^ ]+ ([0-9]{3}).*/\1/p' \
+              "$RUNNER_TEMP/release-response.txt" | tail -n 1)
+            if [[ "$status" == 404 ]]; then
+              echo 'build=true' >> "$GITHUB_OUTPUT"
+            else
+              cat "$RUNNER_TEMP/release-error.txt" >&2
+              echo "Release lookup failed (HTTP ${status:-unknown}); refusing to assume missing." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Stage Release Metadata
+        if: steps.existing.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          mkdir metadata
+          cp release-plan.json metadata/release-plan.json
+          for source in LICENSE NOTICE.md THIRD-PARTY-NOTICES.md third-party/README.md; do
+            test -f "upstream/$source"
+            test ! -L "upstream/$source"
+          done
+          cp upstream/LICENSE metadata/LICENSE.txt
+          cp upstream/NOTICE.md metadata/NOTICE.md
+          cp upstream/THIRD-PARTY-NOTICES.md metadata/THIRD-PARTY-NOTICES.md
+          cp upstream/third-party/README.md metadata/UPSTREAM-LICENSE-REVIEW.md
+
+      - name: Upload Release Metadata
+        if: steps.existing.outputs.build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-metadata
+          path: metadata/*
+          if-no-files-found: error
+          retention-days: 14
+
+  build:
+    name: Build ${{ matrix.os }}/${{ matrix.arch }}
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: win
+            arch: x64
+            runner: windows-2025
+          - os: mac
+            arch: arm64
+            runner: macos-15
+          - os: mac
+            arch: x64
+            runner: macos-15-intel
+          - os: linux
+            arch: x64
+            runner: ubuntu-24.04
+    env:
+      ZCODE_ENV: production
+      ZCODE_ENABLE_MAC_SIGN: '0'
+      ZCODE_ENABLE_WINDOWS_SIGN: '0'
+      ZCODE_ENABLE_WINDOWS_BROWSER_IMPORT: '0'
+      ZCODE_AUTO_UPDATE: '0'
+      ZCODE_ARMS_RUM_ENDPOINT: ''
+      ZCODE_TELEMETRY_REPORT_ENDPOINT: ''
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+    steps:
+      - name: Checkout Immutable Builder
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.builder_sha }}
+          persist-credentials: false
+
+      - name: Checkout Immutable Upstream
+        uses: actions/checkout@v4
+        with:
+          repository: zai-org/ZCode
+          ref: ${{ needs.prepare.outputs.sha }}
+          path: upstream
+          persist-credentials: false
+
+      - name: Set Up Pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ needs.prepare.outputs.node }}
+
+      - name: Set Up Pinned Pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ needs.prepare.outputs.pnpm }}
+          run_install: false
+
+      - name: Verify Runner Architecture And Builder Tests
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          node -e 'if (process.arch !== process.env.TARGET_ARCH) throw new Error(`Runner architecture ${process.arch} does not match ${process.env.TARGET_ARCH}`)'
+          node --check scripts/release.mjs
+          node --test test/release.test.mjs
+
+      - name: Prepare Linux Packaging Dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            rpm xz-utils libarchive-tools libfuse2t64 \
+            libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1
+
+      - name: Disable Builder Auto-Publishing
+        run: node scripts/release.mjs harden upstream
+
+      - name: Install Frozen Upstream Dependencies
+        working-directory: upstream
+        run: pnpm install --frozen-lockfile
+
+      - name: Bundle Native Installers
+        working-directory: upstream
+        env:
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: pnpm bundle:desktop -- --os "$TARGET_OS" --arch "$TARGET_ARCH"
+
+      - name: Smoke Test Packaged Agent Help
+        env:
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { existsSync } from 'node:fs';
+          import { resolve, join } from 'node:path';
+          import { spawnSync } from 'node:child_process';
+          const { TARGET_OS: os, TARGET_ARCH: arch } = process.env;
+          const dist = resolve('upstream/packages/desktop/dist');
+          const app = os === 'mac'
+            ? join(dist, arch === 'arm64' ? 'mac-arm64' : 'mac', 'ZCode.app', 'Contents')
+            : join(dist, os === 'win' ? 'win-unpacked' : 'linux-unpacked');
+          const executable = os === 'mac' ? join(app, 'MacOS', 'ZCode')
+            : join(app, os === 'win' ? 'ZCode.exe' : 'zcode');
+          const agent = join(app, os === 'mac' ? 'Resources' : 'resources', 'glm', 'zcode.cjs');
+          for (const path of [executable, agent]) {
+            if (!existsSync(path)) throw new Error(`Missing packaged runtime: ${path}`);
+          }
+          const result = spawnSync(executable, [agent, '--help'], {
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+            encoding: 'utf8', timeout: 120_000, maxBuffer: 8 * 1024 * 1024,
+          });
+          process.stdout.write(result.stdout ?? '');
+          process.stderr.write(result.stderr ?? '');
+          if (result.error) throw result.error;
+          if (result.status !== 0) throw new Error(`Packaged agent help failed: ${result.status}`);
+          if (!/usage|options|commands/i.test(result.stdout ?? '')) {
+            throw new Error('Packaged agent did not print recognizable help');
+          }
+          NODE
+
+      - name: Collect Validated Installers
+        env:
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: node scripts/release.mjs collect upstream artifacts "$TARGET_OS" "$TARGET_ARCH"
+
+      - name: Upload Native Installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}-${{ matrix.arch }}
+          path: artifacts/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  publish:
+    name: Verify And Publish Complete Release
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Immutable Builder Only
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.builder_sha }}
+          persist-credentials: false
+
+      - name: Set Up Pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ needs.prepare.outputs.node }}
+
+      - name: Download Release Metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: release-metadata
+          path: metadata
+
+      - name: Download All Native Installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: installers-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Validate Complete Release And Generate Manifests
+        run: |
+          set -euo pipefail
+          cp metadata/LICENSE.txt metadata/NOTICE.md metadata/THIRD-PARTY-NOTICES.md \
+            metadata/UPSTREAM-LICENSE-REVIEW.md artifacts/
+          node scripts/release.mjs finalize artifacts metadata/release-plan.json
+
+      - name: Stage Complete Draft And Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_TITLE: ${{ needs.prepare.outputs.title }}
+          BUILDER_SHA: ${{ needs.prepare.outputs.builder_sha }}
+        run: |
+          set -euo pipefail
+          if gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
+            > "$RUNNER_TEMP/publish-response.txt" 2> "$RUNNER_TEMP/publish-error.txt"; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=true \
+              --title "$RELEASE_TITLE" --notes-file release-notes.md
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' > "$RUNNER_TEMP/old-assets.txt"
+            while IFS= read -r asset; do
+              gh release delete-asset "$RELEASE_TAG" "$asset" --yes --repo "$GITHUB_REPOSITORY"
+            done < "$RUNNER_TEMP/old-assets.txt"
+          else
+            status=$(sed -nE 's/^HTTP\/[^ ]+ ([0-9]{3}).*/\1/p' \
+              "$RUNNER_TEMP/publish-response.txt" | tail -n 1)
+            if [[ "$status" != 404 ]]; then
+              cat "$RUNNER_TEMP/publish-error.txt" >&2
+              echo "Release lookup failed (HTTP ${status:-unknown}); refusing to publish." >&2
+              exit 1
+            fi
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --target "$BUILDER_SHA" --draft --title "$RELEASE_TITLE" --notes-file release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+          expected=$(find artifacts -maxdepth 1 -type f | wc -l)
+          actual=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets | length')
+          if [[ "$actual" -ne "$expected" ]]; then
+            echo "Draft asset count mismatch: expected $expected, received $actual" >&2
+            exit 1
+          fi
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
