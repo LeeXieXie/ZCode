@@ -21,6 +21,12 @@
 - 保持上游**自动更新默认关闭**；后续社区构建请从本仓库 Releases 获取。
 - 构建与打包检查不等于桌面完整功能测试，也不证明已登录的模型会话可用。
 
+## ZcodePro 功能对齐
+
+已按固定提交对比 [luxi233/ZcodePro](https://github.com/luxi233/ZcodePro)：它列出的 **13 个插件在官方 3.16.2 源码中均已存在**，四个文档插件版本还更新。保留新版插件，不用旧资源覆盖降级；打包后额外检查技能、MCP 和文档查看器资源，报告随安装包发布。
+
+**Computer Use 尚不能宣称补齐**：ZcodePro 的 Windows Helper 默认放开本地客户端身份校验，源码警告任意本地进程可能驱动电脑操作；原生组件的再分发许可与可重建来源证据也不足。macOS 安装脚本还修改签名信任校验。本仓库不会把这些步骤悄悄接入默认公开发行，也不会运行其脚本更改用户安全设置。完整比较、版本表与接入条件见 [功能审计](docs/zcodepro-assessment.md)。
+
 ## 同步与发布
 
 源码作为 [`upstream`](upstream) Git submodule 引入，来源是 `zai-org/ZCode` 的 `main`。每次构建锁定完整提交 SHA，而非在构建途中继续追踪分支。
@@ -42,7 +48,7 @@
 
 ## 构建边界
 
-不修改上游应用或运行时源码。构建前仅对 `packages/desktop/scripts/bundle.mjs` 的已知调用位置应用精确补丁，强制 `electron-builder --publish never`，禁止隐式发布；匹配失败则停止，等待人工审查。仍执行上游打包入口末尾的运行时依赖检查和 bundle 大小审计，不绕过审计直接调用打包器。
+不修改上游应用或运行时源码。构建前对已知构建脚本位置应用精确补丁：强制 `electron-builder --publish never`，禁止隐式发布；保护 Visualize 的 vendor 快照，避免上游 sourcemap 清理改写文件却未更新哈希、导致功能加载失败。匹配失败则停止，等待人工审查。仍执行上游打包入口末尾的运行时依赖检查和 bundle 大小审计，保留 vendor 原始哈希验证，不绕过审计直接调用打包器。
 
 Node.js 和 pnpm 从该源码快照的 `mise.toml` 读取精确版本，并核对包元数据；当前快照为 **Node.js 24.14.0 / pnpm 10.33.2**。依赖安装使用冻结锁文件，不自动更新依赖。
 
@@ -58,8 +64,9 @@ cd zcode-releases
 仓库自身的检查不需要安装上游依赖，在仓库根目录运行：
 
 ```sh
-node --test test/release.test.mjs
+node --test test/release.test.mjs test/features.test.mjs
 node --check scripts/release.mjs
+node --check scripts/verify-features.mjs
 ```
 
 不要使用不带路径的 `node --test`：它可能递归进入 `upstream`，误运行上游测试。

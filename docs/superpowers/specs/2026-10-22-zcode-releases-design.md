@@ -12,9 +12,10 @@ A source fork with workflow overlays risks synchronization conflicts. A bare
 mirror cannot retain independent workflows. This repository instead keeps the
 upstream source as a Git submodule named `upstream`, with the original repository
 URL and a complete commit SHA. Only the gitlink moves during synchronization.
-The builder never rewrites upstream application/runtime source. It applies one
-fail-closed build-wrapper patch to pass `--publish never` to electron-builder,
-while retaining the wrapper's packaged-runtime and bundle-size audits.
+The builder never rewrites upstream application/runtime source. It applies
+fail-closed build-only patches to pass `--publish never` to electron-builder and
+preserve the Visualize vendor snapshot from sourcemap rewriting. It retains the
+wrapper's packaged-runtime/bundle-size audits and original vendor integrity hashes.
 
 ## Pipeline
 
@@ -48,6 +49,13 @@ The upstream third-party materials document unresolved evidence gaps; attach
 that document and disclose that packaging success is not a full license audit.
 
 ## Acceptance
+
+For the ZcodePro follow-up, retain the newer upstream implementations of all 13
+listed plugins and verify packaged runtime/skill assets. Add a machine-readable
+per-target feature report. Do not misrepresent the unavailable Computer Use
+runtime as restored, nor silently weaken signature trust or redistribute native
+components without adequate provenance/license evidence. See
+`docs/zcodepro-assessment.md` for the fixed-source comparison.
 
 Behavior tests cover metadata validation, installer selection, missing/empty
 artifacts, release completeness, checksum correctness, and provenance output.

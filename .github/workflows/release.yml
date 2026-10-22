@@ -226,7 +226,8 @@ jobs:
         run: |
           node -e 'if (process.arch !== process.env.TARGET_ARCH) throw new Error(`Runner architecture ${process.arch} does not match ${process.env.TARGET_ARCH}`)'
           node --check scripts/release.mjs
-          node --test test/release.test.mjs
+          node --check scripts/verify-features.mjs
+          node --test test/release.test.mjs test/features.test.mjs
 
       - name: Prepare Linux Packaging Dependencies
         if: matrix.os == 'linux'
@@ -283,6 +284,12 @@ jobs:
           }
           NODE
 
+      - name: Verify Packaged Plugin Features
+        env:
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: node scripts/verify-features.mjs upstream "$TARGET_OS" "$TARGET_ARCH"
+
       - name: Collect Validated Installers
         env:
           TARGET_OS: ${{ matrix.os }}
@@ -331,6 +338,8 @@ jobs:
           merge-multiple: true
 
       - name: Validate Complete Release And Generate Manifests
+        env:
+          BUILDER_SHA: ${{ needs.prepare.outputs.builder_sha }}
         run: |
           set -euo pipefail
           cp metadata/LICENSE.txt metadata/NOTICE.md metadata/THIRD-PARTY-NOTICES.md \
@@ -343,6 +352,7 @@ jobs:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           RELEASE_TITLE: ${{ needs.prepare.outputs.title }}
           BUILDER_SHA: ${{ needs.prepare.outputs.builder_sha }}
+          SOURCE_REF: ${{ inputs.source_ref || 'main' }}
         run: |
           set -euo pipefail
           if gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
@@ -373,4 +383,8 @@ jobs:
             echo "Draft asset count mismatch: expected $expected, received $actual" >&2
             exit 1
           fi
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          if [[ "$SOURCE_REF" == main ]]; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          else
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          fi

@@ -31,10 +31,10 @@ and upstream pnpm/Electron packaging.
 installers. `node scripts/release.mjs finalize artifacts release-plan.json`
 checks the complete platform set and writes checksums, provenance, release notes.
 
-- [ ] Write behavioral tests with temporary source/dist fixtures. Check that
+- [x] Write behavioral tests with temporary source/dist fixtures. Check that
   rejecting malformed SHA/tool pins and missing installers fails before code.
-- [ ] Implement metadata reading and installer checks using Node.js built-ins.
-- [ ] Run `node --test` and `node --check scripts/release.mjs`.
+- [x] Implement metadata reading and installer checks using Node.js built-ins.
+- [x] Run `node --test test/release.test.mjs` and `node --check scripts/release.mjs`.
 
 ### Task 2: Native Build and Publishing Workflow
 
@@ -44,23 +44,50 @@ checks the complete platform set and writes checksums, provenance, release notes
 artifact per platform plus a release-metadata artifact. Publish from a separate
 job only after the complete matrix succeeds.
 
-- [ ] Configure schedule, dispatch, concurrency, and least-privilege jobs.
-- [ ] Resolve upstream ref using checkout; read pins; update the main gitlink;
+- [x] Configure schedule, dispatch, concurrency, and least-privilege jobs.
+- [x] Resolve upstream ref using checkout; read pins; update the main gitlink;
   skip already-published releases without suppressing API errors.
-- [ ] Build native Windows/macOS/Linux installers and collect actual outputs.
-- [ ] Generate release manifests and publish a draft with `gh release` before
+- [x] Build native Windows/macOS/Linux installers and collect actual outputs.
+- [x] Generate release manifests and publish a draft with `gh release` before
   setting it public. Never execute upstream code in the privileged publish job.
-- [ ] Run actionlint and inspect the full workflow for expression injection,
+- [x] Run actionlint and inspect the full workflow for expression injection,
   unchecked API errors, missing artifacts, and publishing/signing side effects.
 
 ### Task 3: Documentation and Live Verification
 
 **Files:** `README.md`, `LICENSE`, tracked plan checkboxes.
 
-- [ ] Document download links, synchronization cadence, manual rebuilds,
+- [x] Document download links, synchronization cadence, manual rebuilds,
   platform support, unsigned-build warnings, and public-source feature limits.
 - [ ] Run all tests and static checks; independently review implementation.
-- [ ] Create the public repository, push a Lore-protocol commit, and enable
+- [x] Create the public repository, push a Lore-protocol commit, and enable
   Actions if necessary. Dispatch or observe the initial build.
 - [ ] Inspect each build job and fix recoverable failures. Verify Release asset
   names, checksums, upstream SHA, and repository state before reporting success.
+
+### Task 4: ZcodePro Feature Assessment And Packaged Asset Gate
+
+- [x] Compare fixed upstream and ZcodePro commits; retain newer upstream plugins.
+- [x] Document CUA license/source and local broker peer-identity blockers.
+- [x] Implement per-target reports for 15 plugin/host packages without executing
+  plugins or changing user settings.
+- [x] Strengthen skill/vendor/config checks with regression fixtures.
+- [x] Verify the actual Windows artifact using static NSIS payload extraction.
+- [ ] Build the new gate on native runners and require matching feature reports,
+  four source/hash receipts, and all notices before publication.
+
+## Live Evidence
+
+Initial run `39760618837`: Windows x64, macOS ARM64, and macOS x64 complete
+successfully. Linux bundle and Agent help smoke succeed, but collection rejects
+the actual electron-builder architecture aliases (`x86_64`/`amd64`). No public
+release is created. Regression tests now preserve those original filenames.
+
+Downloaded Windows installer SHA256:
+`21ba386c314b544f267acc2261768b2b7690be1ec530671d64dbb274cba8b335`.
+Static NSIS extraction finds 15 packaged plugin/host packages. The strengthened
+verifier rejects Lucide because upstream afterPack strips its sourceMappingURL,
+contradicting the shipped vendor hash. Restoring only the original Lucide bytes
+in a temporary extracted inspection copy makes all 15 asset checks pass; this is
+a diagnosis, not a verified repaired release. A fail-closed walker patch now
+preserves that vendor snapshot, with a test proving ordinary JS is still cleaned.
