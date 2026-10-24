@@ -178,7 +178,7 @@ async function finalize(directory, planFile) {
     }
     featureReports.push(await fileRecord(directory, name));
   }
-  const repository = process.env.GITHUB_REPOSITORY ?? 'LeeXieXie/zcode-releases';
+  const repository = process.env.GITHUB_REPOSITORY ?? 'LeeXieXie/ZCode';
   const runId = process.env.GITHUB_RUN_ID;
   const provenance = {
     upstream: { repository: upstreamRepository, sha: plan.sha, version: plan.version, date: plan.sourceDate },

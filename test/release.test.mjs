@@ -389,6 +389,20 @@ test('all four real collection receipts finalize successfully together', async (
   for (const name of receiptNames) assert.ok(sums.includes(`  ${name}\n`));
 });
 
+for (const repository of [undefined, 'example/custom-builder']) {
+  test(`provenance uses ${repository ?? 'the canonical repository fallback'}`, async (t) => {
+    const { root, artifacts } = await completeFixture(t);
+    const expected = repository ?? 'LeeXieXie/ZCode';
+    const result = runWithEnv(root, { GITHUB_REPOSITORY: repository, GITHUB_RUN_ID: '12345' },
+      'finalize', artifacts, join(root, 'release-plan.json'));
+    assert.equal(result.status, 0, result.stderr);
+    const provenance = JSON.parse(await readFile(join(artifacts, 'build-provenance.json'), 'utf8'));
+    assert.equal(provenance.builder.repository, expected);
+    assert.equal(provenance.builder.run, `https://github.com/${expected}/actions/runs/12345`);
+    assert.equal(provenance.upstream.repository, 'zai-org/ZCode');
+  });
+}
+
 test('provenance records the immutable builder separately from the workflow trigger', async (t) => {
   const { root, artifacts } = await completeFixture(t);
   const builder = 'b'.repeat(40);

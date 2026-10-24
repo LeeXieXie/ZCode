@@ -13,7 +13,7 @@ and upstream pnpm/Electron packaging.
 ## Global Constraints
 
 - No new application or orchestration package dependencies.
-- Source repository is `zai-org/ZCode`; output is `LeeXieXie/zcode-releases`.
+- Source repository is `zai-org/ZCode`; output is `LeeXieXie/ZCode`.
 - Upstream application/runtime source is not modified; builds use a complete immutable SHA plus a disclosed no-publish build-wrapper patch.
 - Build jobs cannot receive publishing credentials or repository write access.
 - Releases remain drafts until every installer is present and uploaded.

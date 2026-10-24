@@ -2,10 +2,10 @@
 
 ## Published Snapshot
 
-- [Release](https://github.com/LeeXieXie/zcode-releases/releases/tag/v3.16.2-upstream.3c5b22764937)
-- [Successful workflow](https://github.com/LeeXieXie/zcode-releases/actions/runs/39767198922)
+- [Release](https://github.com/LeeXieXie/ZCode/releases/tag/v3.16.2-upstream.3c5b22764937)
+- [Successful workflow](https://github.com/LeeXieXie/ZCode/actions/runs/39767198922)
 - Source: `zai-org/ZCode@3c5b227649371507ddc4eb46ac5133afe6db1cab`.
-- Builder: `LeeXieXie/zcode-releases@5a79fc0b3634dea99a008b85cfbe6d68fe0a597d`.
+- Builder: `LeeXieXie/ZCode@5a79fc0b3634dea99a008b85cfbe6d68fe0a597d`.
 - Upstream app version: `3.16.2`.
 - Tool pins: Node.js `24.14.0`, pnpm `10.33.2`.
 
@@ -31,7 +31,7 @@
 441d65585aaad2ec72fdc3841a2af405ef0eed63d79470650466ece06045fb19  ZCode-3.16.2-win-x64.exe
 ```
 
-- [Repeat-dispatch check](https://github.com/LeeXieXie/zcode-releases/actions/runs/39770717943)
+- [Repeat-dispatch check](https://github.com/LeeXieXie/ZCode/actions/runs/39770717943)
   succeeds: the already-published SHA is detected, native builds/publication are
   skipped, and no duplicate release is created.
 

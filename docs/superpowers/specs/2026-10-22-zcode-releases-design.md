@@ -2,7 +2,7 @@
 
 ## Objective
 
-Maintain a dedicated public repository at `LeeXieXie/zcode-releases` that
+Maintain a dedicated public repository at `LeeXieXie/ZCode` that
 tracks `zai-org/ZCode` and publishes installable community builds. The official
 release currently stops at v3.14.3 while main reports version 3.16.2.
 

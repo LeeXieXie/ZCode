@@ -1,8 +1,8 @@
 # ZCode 社区构建
 
-独立公开仓库 **LeeXieXie/zcode-releases**，跟踪 [zai-org/ZCode](https://github.com/zai-org/ZCode) 的公开源码并通过 GitHub Actions 打包安装文件。**这是非官方社区构建，不是 Z.ai 官方分发，也不代表官方产品的全部功能。**
+独立公开仓库 **LeeXieXie/ZCode**，跟踪 [zai-org/ZCode](https://github.com/zai-org/ZCode) 的公开源码并通过 GitHub Actions 打包安装文件。**这是非官方社区构建，不是 Z.ai 官方分发，也不代表官方产品的全部功能。**
 
-[下载安装包](https://github.com/LeeXieXie/zcode-releases/releases) · [查看构建日志](https://github.com/LeeXieXie/zcode-releases/actions/workflows/release.yml) · [上游源码](https://github.com/zai-org/ZCode)
+[下载安装包](https://github.com/LeeXieXie/ZCode/releases) · [查看构建日志](https://github.com/LeeXieXie/ZCode/actions/workflows/release.yml) · [上游源码](https://github.com/zai-org/ZCode)
 
 仓库配置不等于成功发布记录；请以 Actions 实际结果及 Releases 中公开的附件为准。
 
@@ -57,8 +57,8 @@ Node.js 和 pnpm 从该源码快照的 `mise.toml` 读取精确版本，并核�
 克隆时初始化 submodule：
 
 ```sh
-git clone --recurse-submodules https://github.com/LeeXieXie/zcode-releases.git
-cd zcode-releases
+git clone --recurse-submodules https://github.com/LeeXieXie/ZCode.git
+cd ZCode
 ```
 
 仓库自身的检查不需要安装上游依赖，在仓库根目录运行：
